@@ -2,65 +2,57 @@ var fs = require("fs"),
 	path = require("path"),
 	argv = require("minimist")( process.argv.slice( 2 ) ),
 	request = require("request"),
-	mkdirp = require("mkdirp"),
-	ineed = require("ineed");
+	mkdirp = require("mkdirp");
 
-var gallery = argv.g,
+var hrefs = [];
+var galleryId = argv.g,
 	dir = path.resolve( argv.d || "downloads" );
 
+var galleryPath = "http://api.imgur.com/3/album/" + galleryId;
 
 var download = function( uri, filename, callback ) {
 	request( uri ).pipe( fs.createWriteStream( filename ) ).on( "close", callback );
 };
 
-
-
 var grabImages = function( hrefs ) {
-
 	mkdirp.sync( dir );
-
 	console.log( "Downloading " + hrefs.length + " images to " + dir + "..." );
-
 	hrefs.forEach( function( href ) {
-
 		var filename = href.split("/").slice(-1)[0];
-
 		download( href, dir + "/" + filename, function() {
 			console.log( "Downloaded " + filename );
 		});
-
 	});
-
 };
 
+if( galleryPath && dir ) {
+	var options = {
+		url: galleryPath,
+		type: "GET",
+		dataType: "json",
+		headers: {
+       		Authorization: "Client-ID " + "afe6a62d6f36e49",
+        	Accept: "application/json"			
+		}
+	};
 
-
-if( gallery && dir ) {
-
-	ineed.collect.hyperlinks.from( gallery, function( err, response, result ) {
-		var hrefs = [];
-		result.hyperlinks.forEach( function( link ) {
-	 		// there must be a better way to find the correct links..
-	 		// only name and href are returned in the hyperlink collect, very hard to find another way
-			var imagePath = link.href;
-			if (imagePath.search('/i.imgur') != -1) {
-				hrefs.push(imagePath);
+	function callback(error, response, body) {
+		if (!error && response.statusCode == 200) {
+			var info = JSON.parse(body);
+			var imagesObject = info.data.images;
+			for (let i = 0; i < imagesObject.length; i++) {
+				hrefs.push(imagesObject[i].link);
 			}
-					
-			
-		});
-
+		}
 		grabImages( hrefs );
-
-	});
-
+	}
+	request(options, callback);
 } 
 else {
-
-	console.log( "Usage: node index.js -g [gallery url] -d [download directory]" );
+	console.log( "Usage: node index.js -g [gallery id] -d [download directory]" );
 	console.log( "\t-g The full URL to an Imgur gallery" );
 	console.log( "\t-d The path to the download directory. Default is \"download\".");
-	
+
 }
 
 
